@@ -1,0 +1,80 @@
+install.packages("vcfR")
+library(vcfR)
+
+head(getFIX(vcf))library(vcfR)
+
+vcf <- read.vcfR("113df549.annotated.vcf")
+
+variants <- as.data.frame(getFIX(vcf))
+
+head(variants)
+
+nrow(variants)
+
+library(dplyr)
+library(stringr)
+library(ggplot2)
+
+setwd("/Users/sineadoneill-king/Documents/Houlahan_Lab/Thesis/VCF_files")
+
+files <- list.files(
+  pattern = "\\.EGFR\\.annotated\\.vcf$",
+  full.names = TRUE
+)
+
+results <- data.frame()
+
+for(f in files){
+  
+  sample <- basename(f)
+  sample <- sub("\\.EGFR\\.annotated\\.vcf","",sample)
+  
+  lines <- readLines(f)
+  
+  variants <- lines[!grepl("^#", lines)]
+  
+  text <- paste(variants, collapse = "\n")
+  
+  intron <- str_count(text, "intron_variant")
+  missense <- str_count(text, "missense_variant")
+  synonymous <- str_count(text, "synonymous_variant")
+  frameshift <- str_count(text, "frameshift_variant")
+  
+  results <- rbind(
+    results,
+    data.frame(
+      Sample = sample,
+      Total_Variants = length(variants),
+      Intron = intron,
+      Missense = missense,
+      Synonymous = synonymous,
+      Frameshift = frameshift
+    )
+  )
+}
+
+print(results)
+
+write.csv(
+  results,
+  "EGFR_variant_summary.csv",
+  row.names = FALSE
+)
+
+ggplot(results,
+       aes(x = reorder(Sample, Total_Variants),
+           y = Total_Variants)) +
+  geom_col() +
+  coord_flip() +
+  theme_bw() +
+  labs(
+    title = "EGFR Variants per RNA Sample",
+    x = "Sample",
+    y = "Variant Count"
+  )
+
+ggsave(
+  "EGFR_variant_counts.png",
+  width = 8,
+  height = 5
+)
