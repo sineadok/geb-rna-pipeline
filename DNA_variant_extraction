@@ -1,0 +1,3 @@
+#Access DNA sequenced data and then compare against RNA VCFs
+
+cd /workspace/lab/houlahanlab/resources/external_datasets/tcga_pancancer_atlas
