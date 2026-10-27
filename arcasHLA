@@ -1,0 +1,50 @@
+# Purpose: Determine HLA genotypes from RNA-seq data.
+
+# Input:
+# RNA-seq BAM file
+
+# Process:
+# 1. Extract reads originating from HLA genes on chromosome 6.
+# 2. Compare extracted reads against known HLA reference alleles.
+# 3. Predict patient HLA genotype.
+
+# Output: RNA Class I and Class II HLA alleles
+
+# SETUP (Performed Once)
+
+# Activate environment
+micromamba activate /workspace/lab/houlahanlab/software/micromamba/envs/arcas-hla-044
+
+cd ~/arcasHLA
+
+# STEP 1: EXTRACT HLA READS: Extract reads mapping to the HLA region from the aligned RNA BAM file.
+
+./arcasHLA extract \
+    /workspace/lab/houlahanlab/oneillks/0af61bc8.realn.rg.md.bam \
+    -o arcas_output \
+    -t 2 \
+    -v
+
+# Parameters:
+# -o = output directory
+# -t = number of CPU threads
+# -v = verbose mode
+
+# Expected Output:
+# 0af61bc8.realn.rg.md.extracted.1.fq.gz
+# 0af61bc8.realn.rg.md.extracted.2.fq.gz
+
+# Check command completed successfully
+echo $?
+
+# STEP 2: HLA GENOTYPING: Compare extracted reads against known HLA allele sequencesto identify the most likely HLA genotype.
+
+./arcasHLA genotype \
+    arcas_output/0af61bc8.realn.rg.md.extracted.1.fq.gz \
+    arcas_output/0af61bc8.realn.rg.md.extracted.2.fq.gz \
+    -o arcas_output \
+    -t 2 \
+    -v
+
+# Expected Output :
+# 0af61bc8.genotype.json
