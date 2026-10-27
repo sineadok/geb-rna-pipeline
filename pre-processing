@@ -1,0 +1,105 @@
+#Pre-Process RNA so BAM files can be cleaned up for downstream tools
+
+#how to find the BAM files
+cd /workspace/lab/houlahanlab/projects/pancancer-geb-egfr/data/alignment/rna
+#run /GEB to find files of interest
+
+#copy into your own directory
+cp /workspace/lab/houlahanlab/projects/pancancer-geb-egfr/data/alignment/rna/34c689e2-a20a-4939-8049-db6d0d36743b/*.bam \
+~/projects/hla_pipeline/bam/
+
+conda env list
+#need to activate gatk env to use gatk tools 
+conda activate /workspace/lab/houlahanlab/software/micromamba/envs/gatk_env
+
+
+#adding read groups to the BAM files to provide metadata (sample, library, platform.. etc)
+#INPUT: sample.realn.bam
+#OUTPUT: sample.realn.rg.bam
+
+gatk AddOrReplaceReadGroups \
+  -I 0af61bc8-3dd4-458b-940d-b251e11c422e.rna_seq.genomic.gdc_realn.bam \
+  -O /workspace/lab/houlahanlab/oneillks/0af61bc8.realn.rg.bam \
+  -RGID 1 \
+  -RGLB lib1 \
+  -RGPL ILLUMINA \
+  -RGPU unit1 \
+  -RGSM SampleA
+
+#need to add MD tags- inside each read in a BAM file that tells Oppossum where mismatches are/what bases differ from the reference/ how to adjust base qualities
+#INPUT: sample.realn.rg.bam
+#OUTPUT: sample.realn.rg.md.bam
+
+samtools calmd -b \
+  /workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/bam_rg/5237a678-9f82-4aa3-a874-39179cff6ba5.realn.rg.bam-9f82-4aa3-a874-39179cff6ba5.realn.rg.bam \
+  /workspace/lab/houlahanlab/resources/GRCh38_Indexes/Reference-Fasta-Files/GRCh38.d1.vd1.fa \
+  > /workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/bam_md/5237a678.realn.rg.md.bam
+
+#if that doesn't work for whatever reason- try running on one line:
+samtools calmd -b /workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/bam_rg/5237a678-9f82-4aa3-a874-39179cff6ba5.realn.rg.bam /workspace/lab/houlahanlab/resources/GRCh38_Indexes/Reference-Fasta-Files/GRCh38.d1.vd1.fa > /workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/bam_md/5237a678.realn.rg.md.bam
+
+# Check BAM is valid
+samtools quickcheck output.md.bam
+echo $?
+# Return code 0 = BAM passed validation
+# Return code non-zero = BAM may be corrupted
+
+# Download Opossum source code from GitHub (performed once)
+wget https://raw.githubusercontent.com/CGGOxford/Opossum/master/Opossum.py
+
+# Opossum pre-processes RNA-seq alignments for variant calling: adjusts reads around splice junctions & filters accordingly
+
+#need py2 environment for Opossum
+micromamba activate /workspace/lab/houlahanlab/oneillks/micromamba_root/envs/py2
+
+#INPUT: sample.realn.rg.md.bam
+#OUTPUT: sample.opossum.bam
+
+python Opossum.py \
+  --BamFile /workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/bam_md/80f616bc.realn.rg.md.bam \
+  --OutFile /workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/variants/80f616bc.opossum.bam \
+  --SoftClipsExist True \
+  --MapCutoff 40 \
+  --MinFlankStart 3 \
+  --MinFlankEnd 3 \
+  --ProperlyPaired True \
+  --KeepMismatches False
+
+Parameter Explanations:
+
+  --BamFile
+Input BAM file containing read groups and MD tags.
+This is the RNA-seq alignment file that Opossum will process.
+
+--OutFile
+Output BAM file produced by Opossum.
+This file is used as input for GATK HaplotypeCaller.
+
+--SoftClipsExist True
+Indicates that soft-clipped reads are present in the BAM.
+RNA-seq alignments commonly contain soft clipping around splice junctions.
+
+--MapCutoff 40
+Minimum mapping quality required for a read to be retained.
+Reads with mapping quality below 40 are filtered out.
+
+--MinFlankStart 3
+Minimum number of matched bases required at the start of a read
+adjacent to a splice junction.
+
+--MinFlankEnd 3
+Minimum number of matched bases required at the end of a read
+adjacent to a splice junction.
+
+--ProperlyPaired True
+Retains only reads mapped as proper read pairs.
+Helps reduce false-positive variant calls.
+
+--KeepMismatches False
+Prevents Opossum from retaining mismatch information used during
+its preprocessing steps.
+Uses the default filtering behaviour recommended for downstream
+variant calling.
+
+#Next Step: HaplotypeCaller
+
