@@ -12,7 +12,12 @@
 
 # SETUP (Performed Once)
 
-# Activate environment
+micromamba create -n arcas-hla-044
+micromamba activate arcas-hla-044
+conda install arcas-hla -c bioconda -c conda-forge
+arcasHLA --help
+
+# Activate environment each time
 micromamba activate /workspace/lab/houlahanlab/software/micromamba/envs/arcas-hla-044
 
 cd ~/arcasHLA
@@ -48,3 +53,13 @@ echo $?
 
 # Expected Output :
 # 0af61bc8.genotype.json
+
+# STEP 3: MERGE: If you want to combine and organize HLA results
+# This will generate a single summary table containing HLA allele calls for all samples
+
+./arcasHLA merge \
+  -i ~/projects/hla_pipeline/hla/genotype \
+  -o ~/projects/hla_pipeline/hla/merged \
+  --run pilot
+
+# tells arcasHLA to look in genotype, will take the genotype output files and combine them into a single table
