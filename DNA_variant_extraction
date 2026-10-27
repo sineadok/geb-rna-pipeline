@@ -1,3 +1,47 @@
 #Access DNA sequenced data and then compare against RNA VCFs
 
 cd /workspace/lab/houlahanlab/resources/external_datasets/tcga_pancancer_atlas
+
+#search for the samples TCGA ID 
+grep "TCGA-14-0871" PCA.r1.TCGAbarcode.merge.tnSwapCorrected.10389.fam
+
+#create a keep.txt for PLINK to specify what sample should be extracted
+echo "TCGA-14-0871-10A-... TCGA-14-0871-10A-..." > keep.txt
+
+#only want EGFR DNA Variants (this is based on GRch37 too)
+/workspace/lab/houlahanlab/software/plink-1.9/plink \
+  --bfile PCA.r1.TCGAbarcode.merge.tnSwapCorrected.10389 \
+  --keep keep.txt \
+  --chr 7 \
+  --from-bp 55086714 \
+  --to-bp 55279321 \
+  --recode vcf \
+  --out ~/projects/hla_pipeline/dna_variants/TCGA-14-0871.EGFR.dna
+
+grep -vc "^#" TCGA-14-0871.EGFR.dna.vcf
+
+# -v : exclude lines matching pattern
+# ^# : VCF header lines begin with #
+# -c : count remaining lines
+
+# Convert VCF positions to BED format
+# UCSC liftOver requires BED input.
+# BED coordinates are 0-based, whereas VCF coordinates are 1-based.
+
+grep -v "^#" TCGA-14-0871.EGFR.dna.vcf \
+| awk 'BEGIN{OFS="\t"} {print "chr"$1,$2-1,$2}' \
+> TCGA-14-0871.hg19.bed
+
+#run this to change the reference genome from GRCh37 to GrCh38 to match RNA variants
+/workspace/lab/houlahanlab/software/liftOver \
+TCGA-14-0871.hg19.bed \
+/workspace/lab/houlahanlab/resources/chain_files/hg19ToHg38.over.chain \
+TCGA-14-0871.EGFR.hg38.bed \
+TCGA-14-0871.EGFR.unmapped.bed
+
+# verify all coordinates mapped successfully
+
+wc -l TCGA-14-0871.EGFR.hg19.bed #count lines
+wc -l TCGA-14-0871.EGFR.hg38.bed
+wc -l TCGA-14-0871.EGFR.unmapped.bed 
+
