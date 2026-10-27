@@ -1,0 +1,61 @@
+#Variant Calling and Annotation
+
+#HaplotypeCaller: Identifies Variants by comparing RNA-seq reads against the GRCh38 reference genome
+#Important to use the reference genome that matches what STAR used to align your data
+
+#INPUT: sample.opossum.bam
+#OUPUT: sample.opossum.vcf
+
+gatk HaplotypeCaller \
+  -R /workspace/lab/houlahanlab/resources/GRCh38_Indexes/Reference-Fasta-Files/GRCh38.d1.vd1.fa \
+  -I ~/projects/hla_pipeline/variants/5237a678.opossum.bam   \
+  -O ~/projects/hla_pipeline/variants/5237a678.opossum.vcf.gdz
+
+ls -lh 0af61bc8.opossum.vcf.gz #check it
+
+#SnpEFF: SnpEff predicts the functional effects of variants and generates 
+# mutated protein sequences for downstream analysis.
+
+#INPUT: sample.opossum.vcf
+#OUPUT: sample.annotated.vcf
+
+cd ~/projects/hla_pipeline/snpeff
+
+/usr/lib/jvm/java-21-openjdk/bin/java \
+-jar /opt/COMMON_APPLICATIONS/snpEff/snpEff.jar \
+ann \
+-noStats \
+-onlyProtein \
+-fastaProt 979a75fb.protein_changes.fasta \
+GRCh38.mane.1.0.ensembl \
+~/projects/hla_pipeline/variants/979a75fb.opossum.vcf.gdz \
+> 979a75fb.annotated.vcf
+
+# Verify Output
+grep "ANN=" 979a75fb.annotated.vcf | head
+
+head 979a75fb.protein_changes.fasta
+
+
+Parameter Explaination: 
+  
+ann
+Run variant annotation.
+
+-noStats
+Do not generate summary statistics files.
+
+-onlyProtein
+Only output protein-changing sequences.
+
+-fastaProt
+Create a FASTA file containing altered protein sequences.
+
+GRCh38.mane.1.0.ensembl
+Reference gene annotation database.
+
+annotated.vcf
+VCF containing functional annotations.
+
+protein_changes.fasta
+Mutated protein sequences derived from the detected variants.
