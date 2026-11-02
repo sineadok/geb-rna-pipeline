@@ -63,3 +63,5 @@ echo $?
   --run pilot
 
 # tells arcasHLA to look in genotype, will take the genotype output files and combine them into a single table
+
+workspace/lab/houlahanlab/resources/external_datasets/tcga_pancancer_atlas$ grep "TCGA-06-2561" Shukla_Wu_Getz_Polysolver_HLA_Types_2015.tsv
