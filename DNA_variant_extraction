@@ -20,6 +20,17 @@ echo "TCGA-14-0871-10A-... TCGA-14-0871-10A-..." > keep.txt
 
 grep -vc "^#" TCGA-14-0871.EGFR.dna.vcf
 
+sed 's/^7\t/chr7\t/' TCGA-14-0871.EGFR.hg19.vcf \
+  > TCGA-14-0871.EGFR.hg19.chr.vcf
+
+picard LiftoverVcf \
+  I=/workspace/lab/houlahanlab/resources/external_datasets/tcga_pancancer_atlas/TCGA-14-0871.EGFR.hg19.chr.vcf \
+  O=~/projects/hla_pipeline/egfr_liftover/TCGA-14-0871.EGFR.hg38.vcf \
+  CHAIN=/workspace/lab/houlahanlab/resources/chain_files/hg19ToHg38.over.chain \
+  REJECT=~/projects/hla_pipeline/egfr_liftover/TCGA-14-0871.EGFR.hg38.rejected.vcf \
+  R=/workspace/lab/houlahanlab/resources/GRCh38_Indexes/GATK-resource-bundle/Homo_sapiens_assembly38.fasta \
+  RECOVER_SWAPPED_REF_ALT=true
+
 # -v : exclude lines matching pattern
 # ^# : VCF header lines begin with #
 # -c : count remaining lines
