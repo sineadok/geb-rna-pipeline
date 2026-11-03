@@ -8,7 +8,7 @@ grep "TCGA-06-0645" PCA.r1.TCGAbarcode.merge.tnSwapCorrected.10389.fam
 # Create keep file: FID and IID are the same so that's why we repeat them
 echo "TCGA-06-0645-10A-01D-1492-08 TCGA-06-0645-10A-01D-1492-08" > 0645keep.txt
 
-# Extract EGFR-region SNPs
+# Extract EGFR-region SNPs: filtered by bp interval region
 /workspace/lab/houlahanlab/software/plink-1.9/plink \
   --bfile PCA.r1.TCGAbarcode.merge.tnSwapCorrected.10389 \
   --keep 0645keep.txt \
@@ -21,11 +21,19 @@ echo "TCGA-06-0645-10A-01D-1492-08 TCGA-06-0645-10A-01D-1492-08" > 0645keep.txt
 # Count hg19 variants
 grep -vc "^#" TCGA-06-0645.EGFR.hg19.vcf
 
-# Add chr prefix
+#The dataset contains 42 EGFR-region SNPs.
+
+# Add chr prefix: Rename 7 → chr7 so picard can run
 sed 's/^7\t/chr7\t/' TCGA-06-0645.EGFR.hg19.vcf \
   > TCGA-06-0645.EGFR.hg19.chr.vcf
 
 # Liftover hg19 -> hg38
+#picard is a sequencing/VCF/BAM utility tool
+# Picard uses a chain file to map positions between genome builds.
+# -Xmx4g allocates 4 gigabytes of memory to Java.
+# RECOVER_SWAPPED_REF_ALT=true attempts to rescue variants whose
+# reference and alternate alleles become reversed after liftover
+
 picard -Xmx4g LiftoverVcf \
   I=/workspace/lab/houlahanlab/resources/external_datasets/tcga_pancancer_atlas/TCGA-06-0645.EGFR.hg19.chr.vcf \
   O=~/projects/hla_pipeline/egfr_liftover/TCGA-06-0645.EGFR.hg38.vcf \
