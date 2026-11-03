@@ -5,7 +5,7 @@ cd /workspace/lab/houlahanlab/resources/external_datasets/tcga_pancancer_atlas
 # Find sample in .fam
 grep "TCGA-06-0645" PCA.r1.TCGAbarcode.merge.tnSwapCorrected.10389.fam
 
-# Create keep file
+# Create keep file: FID and IID are the same so that's why we repeat them
 echo "TCGA-06-0645-10A-01D-1492-08 TCGA-06-0645-10A-01D-1492-08" > 0645keep.txt
 
 # Extract EGFR-region SNPs
