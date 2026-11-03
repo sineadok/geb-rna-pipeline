@@ -23,7 +23,7 @@ grep -vc "^#" TCGA-14-0871.EGFR.dna.vcf
 sed 's/^7\t/chr7\t/' TCGA-14-0871.EGFR.hg19.vcf \
   > TCGA-14-0871.EGFR.hg19.chr.vcf
 
-picard LiftoverVcf \
+picard -Xmx4g LiftoverVcf \
   I=/workspace/lab/houlahanlab/resources/external_datasets/tcga_pancancer_atlas/TCGA-14-0871.EGFR.hg19.chr.vcf \
   O=~/projects/hla_pipeline/egfr_liftover/TCGA-14-0871.EGFR.hg38.vcf \
   CHAIN=/workspace/lab/houlahanlab/resources/chain_files/hg19ToHg38.over.chain \
