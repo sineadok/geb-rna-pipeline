@@ -1,80 +1,147 @@
+
 install.packages("vcfR")
 library(vcfR)
 
-head(getFIX(vcf))library(vcfR)
+#========================
+# Read DNA VCFs
+#========================
 
-vcf <- read.vcfR("113df549.annotated.vcf")
+vcf_2561 <- read.vcfR("TCGA-06-2561.EGFR.hg38.vcf")
+vcf_1390 <- read.vcfR("TCGA-19-1390.EGFR.hg38.vcf")
+vcf_0871 <- read.vcfR("TCGA-14-0871.EGFR.hg38.vcf")
+vcf_5410 <- read.vcfR("TCGA-06-5410.EGFR.hg38.vcf")
+vcf_0645 <- read.vcfR("TCGA-06-0645.EGFR.hg38.vcf")
 
-variants <- as.data.frame(getFIX(vcf))
-
-head(variants)
-
-nrow(variants)
-
-library(dplyr)
-library(stringr)
-library(ggplot2)
+#========================
+# Read RNA VCFs
+#========================
 
 setwd("/Users/sineadoneill-king/Documents/Houlahan_Lab/Thesis/VCF_files")
 
-files <- list.files(
-  pattern = "\\.EGFR\\.annotated\\.vcf$",
-  full.names = TRUE
+rna_2561_vcf <- read.vcfR("0af61bc8.EGFR.annotated.vcf")
+rna_1390_vcf <- read.vcfR("113df549.EGFR.annotated.vcf")
+rna_0871_vcf <- read.vcfR("979a75fb.EGFR.annotated.vcf")
+rna_5410_vcf <- read.vcfR("5237a678.EGFR.annotated.vcf")
+rna_0645_vcf <- read.vcfR("9f962dec.EGFR.annotated.vcf")
+
+#========================
+# Convert to data frames
+#========================
+
+dna_2561 <- as.data.frame(getFIX(vcf_2561))
+dna_1390 <- as.data.frame(getFIX(vcf_1390))
+dna_0871 <- as.data.frame(getFIX(vcf_0871))
+dna_5410 <- as.data.frame(getFIX(vcf_5410))
+dna_0645 <- as.data.frame(getFIX(vcf_0645))
+
+rna_2561 <- as.data.frame(getFIX(rna_2561_vcf))
+rna_1390 <- as.data.frame(getFIX(rna_1390_vcf))
+rna_0871 <- as.data.frame(getFIX(rna_0871_vcf))
+rna_5410 <- as.data.frame(getFIX(rna_5410_vcf))
+rna_0645 <- as.data.frame(getFIX(rna_0645_vcf))
+
+# Shared positions
+common_pos <- intersect(
+  dna_2561$POS,
+  rna_2561$POS
 )
 
-results <- data.frame()
+length(common_pos)
 
-for(f in files){
-  
-  sample <- basename(f)
-  sample <- sub("\\.EGFR\\.annotated\\.vcf","",sample)
-  
-  lines <- readLines(f)
-  
-  variants <- lines[!grepl("^#", lines)]
-  
-  text <- paste(variants, collapse = "\n")
-  
-  intron <- str_count(text, "intron_variant")
-  missense <- str_count(text, "missense_variant")
-  synonymous <- str_count(text, "synonymous_variant")
-  frameshift <- str_count(text, "frameshift_variant")
-  
-  results <- rbind(
-    results,
-    data.frame(
-      Sample = sample,
-      Total_Variants = length(variants),
-      Intron = intron,
-      Missense = missense,
-      Synonymous = synonymous,
-      Frameshift = frameshift
-    )
+# Keep only shared variants
+dna_common <- dna_2561[
+  dna_2561$POS %in% common_pos,
+]
+
+rna_common <- rna_2561[
+  rna_2561$POS %in% common_pos,
+]
+
+# REF concordance
+sum(
+  dna_common$REF ==
+    rna_common$REF
+)
+
+# ALT concordance
+sum(
+  dna_common$ALT ==
+    rna_common$ALT
+)
+
+
+
+library(vcfR)
+library(dplyr)
+
+# Extract genotypes
+dna_gt <- extract.gt(vcf_2561_dna, element = "GT")[,1]
+rna_gt <- extract.gt(rna_2561_vcf, element = "GT")[,1]
+
+# Build DNA table
+dna <- as.data.frame(
+  getFIX(vcf_2561_dna),
+  stringsAsFactors = FALSE
+) |>
+  transmute(
+    CHROM,
+    POS = as.numeric(POS),
+    REF,
+    ALT,
+    GT.DNA = dna_gt
+  )
+
+# Build RNA table
+rna <- as.data.frame(
+  getFIX(rna_2561_vcf),
+  stringsAsFactors = FALSE
+) |>
+  transmute(
+    CHROM,
+    POS = as.numeric(POS),
+    REF,
+    ALT,
+    QUAL = as.numeric(QUAL),
+    GT.RNA = rna_gt
+  )
+
+# Keep only shared positions
+shared_2561 <- inner_join(
+  dna,
+  rna,
+  by = c("CHROM", "POS"),
+  suffix = c(".DNA", ".RNA")
+)
+
+# Compare REF and ALT alleles
+shared_2561 <- shared_2561 |>
+  mutate(
+    same_ref = REF.DNA == REF.RNA,
+    same_alt = ALT.DNA == ALT.RNA
+  )
+
+# Treat 1/0 and 0/1 as the same genotype
+norm_gt <- function(gt) {
+  sapply(
+    strsplit(gt, "[/|]"),
+    function(x) paste(sort(x), collapse = "/")
   )
 }
 
-print(results)
-
-write.csv(
-  results,
-  "EGFR_variant_summary.csv",
-  row.names = FALSE
-)
-
-ggplot(results,
-       aes(x = reorder(Sample, Total_Variants),
-           y = Total_Variants)) +
-  geom_col() +
-  coord_flip() +
-  theme_bw() +
-  labs(
-    title = "EGFR Variants per RNA Sample",
-    x = "Sample",
-    y = "Variant Count"
+# Compare genotypes
+shared_2561 <- shared_2561 |>
+  mutate(
+    GT.DNA.n = ifelse(is.na(GT.DNA), NA, norm_gt(GT.DNA)),
+    GT.RNA.n = ifelse(is.na(GT.RNA), NA, norm_gt(GT.RNA)),
+    concordant = GT.DNA.n == GT.RNA.n
   )
 
-ggsave(
-  "EGFR_variant_counts.png",
-  width = 8,
-  height = 5
+# View table
+shared_2561
+
+# Optional: save to CSV
+write.csv(
+  shared_2561,
+  "TCGA-06-2561_DNA_vs_RNA.csv",
+  row.names = FALSE
 )
