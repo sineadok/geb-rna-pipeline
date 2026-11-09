@@ -1,0 +1,119 @@
+# Import pandas for reading the sample sheet
+import pandas as pd
+
+# Import Path for file checking
+from pathlib import Path
+
+# Import subprocess for running terminal commands
+import subprocess
+
+# Path to the GDC sample sheet (or whatever rna sample sheet is)
+sample_sheet = "/workspace/lab/houlahanlab/projects/pancancer-geb-egfr/data/alignment/rna/gdc_sample_sheet.2026-07-24_female.tsv"
+
+# Top-level RNA directory
+bam_dir = "/workspace/lab/houlahanlab/projects/pancancer-geb-egfr/data/alignment/rna"
+
+# Directory where arcasHLA outputs will be written
+output_dir = "/workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/arcas_output"
+
+# Read the sample sheet
+df = pd.read_csv(sample_sheet, sep="\t")
+
+# Keep only GBM samples
+gbm = df[df["Project.ID"] == "TCGA-GBM"]
+
+# Print number of GBM samples
+print(f"Found {len(gbm)} GBM samples")
+
+# Loop through all GBM samples
+#can change this to loop through different numebrs
+for _, row in gbm.iterrows():
+
+    # Get TCGA sample ID
+    sample_id = row["Sample.ID"]
+
+    try:
+
+        # Get UUID directory containing the BAM
+        file_id = row["File.ID"]
+
+        # Get BAM filename
+        bam_name = row["File.Name"]
+
+        # Show which sample is being processed
+        print(f"\nProcessing {sample_id}")
+
+        # Construct full BAM path
+        bam_path = f"{bam_dir}/{file_id}/{bam_name}"
+
+        # Remove .bam from filename
+        prefix = bam_name.replace(".bam", "")
+
+        # Extract BAM UUID
+        bam_uuid = bam_name.split(".")[0]
+
+        # Expected extracted FASTQs
+        fq1 = f"{output_dir}/{prefix}.extracted.1.fq.gz"
+        fq2 = f"{output_dir}/{prefix}.extracted.2.fq.gz"
+
+        # Expected genotype JSON
+        json_file = f"{output_dir}/{bam_uuid}.genotype.json"
+
+        # Skip sample if genotype already exists
+        if Path(json_file).exists():
+
+            print(f"Skipping {sample_id} (genotype already exists)")
+            continue
+
+        # Check BAM exists
+        if not Path(bam_path).exists():
+
+            print(f"BAM not found: {bam_path}")
+            continue
+
+        # Skip extract if FASTQs already exist
+        if Path(fq1).exists() and Path(fq2).exists():
+
+            print("FASTQs already exist")
+
+        else:
+
+            # Build extract command
+            extract_cmd = [
+                "./arcasHLA",
+                "extract",
+                bam_path,
+                "-o",
+                output_dir,
+                "-t",
+                "2",
+                "-v"
+            ]
+
+            subprocess.run(extract_cmd, check=True)
+
+            print("Extract complete")
+
+        # Build genotype command
+        genotype_cmd = [
+            "./arcasHLA",
+            "genotype",
+            fq1,
+            fq2,
+            "-o",
+            output_dir,
+            "-t",
+            "2",
+            "-v"
+        ]
+
+        subprocess.run(genotype_cmd, check=True)
+
+        print("Genotype complete")
+
+    except Exception as e:
+
+        print(f"FAILED: {sample_id}")
+        print(e)
+
+        continue
