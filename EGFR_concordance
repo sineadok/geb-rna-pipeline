@@ -1,0 +1,117 @@
+
+# Outputs:
+# - DNA variant counts
+# - RNA variant counts
+# - Shared positions
+# - Callable sites
+# - Strict concordance
+# - Missing→0/0 concordance
+
+setwd("/Users/sineadoneill-king/Documents/Houlahan_Lab/Thesis/VCF_files")
+
+#so later on can simply subsitute
+compare_sample <- function(
+    sample_name,
+    dna_file,
+    rna_file
+) {
+  
+  dna_vcf <- read.vcfR(dna_file)
+  rna_vcf <- read.vcfR(rna_file)
+  
+  dna_gt <- extract.gt(dna_vcf, "GT")[,1]
+  rna_gt <- extract.gt(rna_vcf, "GT")[,1]
+  
+  dna <- data.frame(
+    getFIX(dna_vcf),
+    stringsAsFactors = FALSE
+  )
+  
+  rna <- data.frame(
+    getFIX(rna_vcf),
+    stringsAsFactors = FALSE
+  )
+  
+  dna$GT <- dna_gt
+  rna$GT <- rna_gt
+  
+  shared <- inner_join(
+    dna,
+    rna,
+    by = c("CHROM","POS"),
+    suffix = c(".DNA",".RNA")
+  )
+  
+  shared$GT.DNA.n <- sapply(shared$GT.DNA, norm_gt)
+  shared$GT.RNA.n <- sapply(shared$GT.RNA, norm_gt)
+  
+  strict <- shared |>
+    filter(
+      !is.na(GT.DNA.n),
+      !is.na(GT.RNA.n)
+    )
+  
+  strict$concordant <-
+    strict$GT.DNA.n ==
+    strict$GT.RNA.n
+  
+  shared_ref <- shared
+  
+  shared_ref$GT.DNA.n[
+    is.na(shared_ref$GT.DNA.n)
+  ] <- "0/0"
+  
+  shared_ref$GT.RNA.n[
+    is.na(shared_ref$GT.RNA.n)
+  ] <- "0/0"
+  
+  shared_ref$concordant <-
+    shared_ref$GT.DNA.n ==
+    shared_ref$GT.RNA.n
+  
+  data.frame(
+    Sample = sample_name,
+    DNA_Variants = nrow(dna),
+    RNA_Variants = nrow(rna),
+    Shared_Positions = nrow(shared),
+    Callable_Sites = nrow(strict),
+    Strict_Concordance =
+      mean(strict$concordant) * 100,
+    Missing0_Concordance =
+      mean(shared_ref$concordant) * 100
+  )
+  
+}
+
+
+#outside the function
+result_1390 <- compare_sample(
+  sample_name = "TCGA-19-1390",
+  dna_file = "TCGA-19-1390.EGFR.hg38.vcf",
+  rna_file = "113df549.EGFR.annotated.vcf"
+)
+
+result_0871 <- compare_sample(
+  sample_name = "TCGA-14-0871",
+  dna_file = "TCGA-14-0871.EGFR.hg38.vcf",
+  rna_file = "979a75fb.EGFR.annotated.vcf"
+)
+
+result_5410 <- compare_sample(
+  sample_name = "TCGA-06-5410",
+  dna_file = "TCGA-06-5410.EGFR.hg38.vcf",
+  rna_file = "5237a678.EGFR.annotated.vcf"
+)
+
+result_0645 <- compare_sample(
+  sample_name = "TCGA-06-0645",
+  dna_file = "TCGA-06-0645.EGFR.hg38.vcf",
+  rna_file = "9f962dec.EGFR.annotated.vcf"
+)
+
+
+write.csv(
+  summary_table,
+  "EGFR_concordance_summary.csv",
+  row.names = FALSE
+)
