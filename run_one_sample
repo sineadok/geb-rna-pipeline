@@ -1,0 +1,87 @@
+#open tmux session and request a slurm allocation
+
+#linux is the operating system
+
+#!/bin/bash
+
+# if a command breaks- the script will stop immediately
+set -e
+
+#create variables to simplify/change:
+# take note of no spaces
+SAMPLE="c7648754"
+
+INPUT_BAM="/workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/bam/c7648754-3563-4d93-8107-d64def41fd4b.rna_seq.genomic.gdc_realn.bam" # change this 
+
+REF="/workspace/lab/houlahanlab/resources/GRCh38_Indexes/Reference-Fasta-Files/GRCh38.d1.vd1.fa" # so when we need ref we can write $REF and it will run instead of the huge path
+
+OUTDIR="/workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/opossum_test"
+
+#bash's version of print from python
+echo "Step 1: Add read groups"
+
+# the \ means continue on to the next line
+
+micromamba run -p /workspace/lab/houlahanlab/software/micromamba/envs/gatk_env gatk --version
+which gatk
+gatk --version
+
+gatk AddOrReplaceReadGroups \
+    -I $INPUT_BAM \
+    -O $OUTDIR/bam_rg/${SAMPLE}.rg.bam \
+    -RGID 1 \
+    -RGLB lib1 \
+    -RGPL ILLUMINA \
+    -RGPU unit1 \
+    -RGSM ${SAMPLE}
+
+echo "Done adding Read Groups"
+
+ls -lh $OUTDIR/bam_rg/
+
+echo "Step 2: Add MD tags"
+
+samtools calmd -b \
+    $OUTDIR/bam_rg/${SAMPLE}.rg.bam \
+    $REF \
+    > $OUTDIR/bam_md/${SAMPLE}.md.bam
+
+echo "MD tags complete"
+
+echo "Activating py2"
+eval "$(micromamba shell hook --shell bash)"
+
+micromamba activate /workspace/lab/houlahanlab/oneillks/micromamba_root/envs/py2
+
+python --version
+
+
+echo "Running Opossum"
+
+cd ~/opossum
+
+python Opossum.py \
+  --BamFile $OUTDIR/bam_md/${SAMPLE}.md.bam \
+  --OutFile $OUTDIR/variants/${SAMPLE}.opossum.bam \
+  --SoftClipsExist True \
+  --MapCutoff 40 \
+  --MinFlankStart 3 \
+  --MinFlankEnd 3 \
+  --ProperlyPaired True \
+  --KeepMismatches False
+
+
+echo "Opossum Done"
+
+echo "Running HaplotypeCaller"
+
+micromamba deactivate
+
+micromamba run -p /workspace/lab/houlahanlab/software/micromamba/envs/gatk_env \
+    gatk HaplotypeCaller \
+    -R $REF \
+    -I $OUTDIR/variants/${SAMPLE}.opossum.bam \
+    -O $OUTDIR/variants/${SAMPLE}.vcf.gz
+
+echo "HaplotypeCaller complete"
+date
