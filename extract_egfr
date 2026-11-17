@@ -100,6 +100,8 @@ picard LiftoverVcf \
     R=$REF \
     RECOVER_SWAPPED_REF_ALT=true
 
+## Allow Picard to recover variants where the reference allele differs between hg19 and hg38. In these cases REF and ALT are swapped so the lifted VCF remains consistent with the GRCh38 reference genome.
+
 echo
 echo "Finished liftover"
 
