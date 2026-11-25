@@ -1,0 +1,148 @@
+#set it up in bash
+#!/bin/bash
+
+#if there is an error cance;
+set -e
+
+REF="/workspace/lab/houlahanlab/resources/GRCh38_Indexes/Reference-Fasta-Files/GRCh38.d1.vd1.fa"
+
+OUTDIR="/workspace/lab/houlahanlab/oneillks/projects/hla_pipeline/opossum_test"
+
+#list of variants from GNOMAD in the EGFR region
+GNOMAD="$OUTDIR/test/gnomad.EGFR.vcf.gz"
+
+mkdir -p $OUTDIR/test
+
+# Summary table
+
+#output a summary table
+echo -e "UUID\tCase.ID\tSample.ID\tTotal_Variants\tGnomad_Variants" \
+> $OUTDIR/test/variant_counts.tsv
+
+# Skip header row, then loop through samples (start reading from line 2, split cause tab seperated, read columns into variables)
+
+tail -n +2 GBM_RNA_BAM_mapping.tsv | while IFS=$'\t' read -r \
+FILE_ID \
+FILE_NAME \
+DATA_CATEGORY \
+DATA_TYPE \
+PROJECT_ID \
+CASE_ID \
+SAMPLE_ID \
+TISSUE_TYPE \
+TUMOR_DESCRIPTOR \
+SPECIMEN_TYPE \
+PRESERVATION_METHOD \
+BAM_PATH \
+UUID
+do
+
+    echo "================================="
+    echo "Processing $CASE_ID"
+    echo "$SAMPLE_ID"
+    echo "================================="
+
+    # -------------------------
+    # Extract EGFR reads
+    # -------------------------
+
+#filter it down to the EGFR region for each bam 
+
+    samtools view -b \
+        "$BAM_PATH" \
+        chr7:55019017-55211628 \
+        > $OUTDIR/test/${UUID}.EGFR.bam
+
+    samtools index \
+        $OUTDIR/test/${UUID}.EGFR.bam
+
+    # -------------------------
+    # Add read groups
+    # -------------------------
+
+    micromamba run \
+        -p /workspace/lab/houlahanlab/software/micromamba/envs/gatk_env \
+        gatk AddOrReplaceReadGroups \
+        -I $OUTDIR/test/${UUID}.EGFR.bam \
+        -O $OUTDIR/test/${UUID}.rg.bam \
+        -RGID 1 \
+        -RGLB lib1 \
+        -RGPL ILLUMINA \
+        -RGPU unit1 \
+        -RGSM ${UUID}
+
+    # -------------------------
+    # Add MD tags
+    # -------------------------
+
+    samtools calmd -b \
+        $OUTDIR/test/${UUID}.rg.bam \
+        $REF \
+        > $OUTDIR/test/${UUID}.md.bam
+
+    # -------------------------
+    # Opossum
+    # -------------------------
+
+    eval "$(micromamba shell hook --shell bash)"
+
+    micromamba activate \
+        /workspace/lab/houlahanlab/oneillks/micromamba_root/envs/py2
+
+    cd ~/opossum
+
+    python Opossum.py \
+        --BamFile $OUTDIR/test/${UUID}.md.bam \
+        --OutFile $OUTDIR/test/${UUID}.opossum.bam \
+        --SoftClipsExist True \
+        --MapCutoff 40 \
+        --MinFlankStart 3 \
+        --MinFlankEnd 3 \
+        --ProperlyPaired True \
+        --KeepMismatches False
+
+    micromamba deactivate
+
+    # -------------------------
+    # HaplotypeCaller
+    # -------------------------
+
+    micromamba run \
+        -p /workspace/lab/houlahanlab/software/micromamba/envs/gatk_env \
+        gatk HaplotypeCaller \
+        -R $REF \
+        -I $OUTDIR/test/${UUID}.opossum.bam \
+        -L chr7:55019017-55211628 \
+        -O $OUTDIR/test/${UUID}.EGFR.vcf.gz
+
+    TOTAL=$(bcftools view -H \
+        $OUTDIR/test/${UUID}.EGFR.vcf.gz | wc -l)
+
+    # -------------------------
+    # gnomAD filter
+    # -------------------------
+#keep only variants found in GNOMAD 
+
+    bcftools isec \
+        -n=2 \
+        -w1 \
+        $OUTDIR/test/${UUID}.EGFR.vcf.gz \
+        $GNOMAD \
+        -Oz \
+        -o $OUTDIR/test/${UUID}.EGFR.gnomad.vcf.gz
+
+    tabix -p vcf \
+        $OUTDIR/test/${UUID}.EGFR.gnomad.vcf.gz
+
+    GNOMAD_COUNT=$(bcftools view -H \
+        $OUTDIR/test/${UUID}.EGFR.gnomad.vcf.gz | wc -l)
+
+    echo -e \
+"${UUID}\t${CASE_ID}\t${SAMPLE_ID}\t${TOTAL}\t${GNOMAD_COUNT}" \
+>> $OUTDIR/test/variant_counts.tsv
+
+    echo "$UUID complete"
+
+done
+
+echo "All GBM samples complete."
